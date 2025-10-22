@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Surprise - Countdown to Oct 26</title>
+<style>
+  :root{--bg1:#ff9a9e;--bg2:#fad0c4;--card:#ffffffde;--glass:rgba(255,255,255,0.08)}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;background:linear-gradient(135deg,var(--bg1),var(--bg2));color:#111}
+  .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{width:980px;max-width:96%;background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02));border-radius:18px;padding:26px;position:relative;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,0.18)}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .title{color:white;font-size:28px;font-weight:700;text-shadow:0 6px 18px rgba(0,0,0,0.28)}
+  #countdown{display:flex;gap:10px;align-items:center;font-family:monospace}
+  .part{background:var(--glass);padding:10px 14px;border-radius:10px;min-width:64px;text-align:center;color:white;backdrop-filter:blur(6px);box-shadow:0 8px 18px rgba(0,0,0,0.14);transition:transform .28s ease}
+  .label{display:block;font-size:11px;color:#fff6;margin-top:6px;font-weight:700}
+  .big{margin-top:18px;color:white;font-size:48px;font-weight:800;text-align:center;text-shadow:0 8px 30px rgba(0,0,0,0.32)}
+  .message{margin-top:20px;background:var(--card);padding:18px;border-radius:12px;font-size:18px;line-height:1.6;color:#222;transform:translateY(18px);opacity:0;filter:blur(6px);transition:all .9s cubic-bezier(.2,.9,.2,1);display:none}
+  .message.show{display:block;opacity:1;transform:translateY(0);filter:blur(0)}
+  .heart{display:inline-block;margin-left:8px;color:#e91e63}
+  footer{position:absolute;right:18px;bottom:12px;color:#fff8;font-size:13px}
+  /* confetti canvas */
+  canvas#confetti{position:absolute;inset:0;pointer-events:none;z-index:60;opacity:0;transition:opacity .6s ease}
+  canvas#confetti.active{opacity:1}
+  /* floating hearts */
+  .hearts{position:absolute;left:50%;top:34%;transform:translateX(-50%);pointer-events:none;z-index:70}
+  .h{position:absolute;width:36px;height:36px;background:linear-gradient(180deg,#ff8a9e,#ff3d81);transform:rotate(-45deg);border-radius:6px;opacity:0;animation:rise 3s linear forwards}
+  .h::before,.h::after{content:"";position:absolute;background:inherit;border-radius:50%;}
+  .h::before{width:36px;height:36px;left:0;top:-18px;border-radius:50% 50% 0 0}
+  .h::after{width:36px;height:36px;left:18px;top:0;border-radius:50% 50% 0 0;transform:rotate(90deg)}
+  @keyframes rise{
+    0%{transform:translateY(0) scale(.6) rotate(-45deg);opacity:0}
+    10%{opacity:1}
+    100%{transform:translateY(-320px) translateX(120px) scale(1.05) rotate(-10deg);opacity:0}
+  }
+  /* small helper */
+  .center{display:flex;align-items:center;justify-content:center;flex-direction:column}
+  .note{color:#fff9;margin-top:10px;font-size:13px}
+  .play-btn{background:rgba(255,255,255,0.12);color:white;padding:8px 12px;border-radius:10px;border:0;cursor:pointer;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" role="main" aria-live="polite">
+    <canvas id="confetti"></canvas>
+    <header>
+      <div class="title">A Little Surprise 🎁</div>
+      <div id="countdown" aria-hidden="false">
+        <div class="part"><div id="days">--</div><span class="label">days</span></div>
+        <div class="part"><div id="hours">--</div><span class="label">hrs</span></div>
+        <div class="part"><div id="minutes">--</div><span class="label">min</span></div>
+        <div class="part"><div id="seconds">--</div><span class="label">sec</span></div>
+      </div>
+    </header>
+
+ 
+
+    <div class="center">
+      <div class="note">The message will appear automatically at the start of Oct 26 (00:00 UTC)</div>
+      <button id="playControl" class="play-btn" style="margin-top:12px">Enable music on reveal</button>
+    </div>
+
+    <div class="message" id="mainMessage" aria-hidden="true">
+      <div class="big">Happy Birthday Hiba <span class="heart">❤</span></div>
+
+      Happy Birthday my fnikicha ❤ <br><br>
+      On this special day, I just want to remind you how deeply I love you and how grateful I am to have you in my life. You bring light, peace, and joy to every single day, and I can’t imagine my world without your smile.<br><br>
+      You deserve every beautiful thing this life can offer — laughter that never fades, dreams that come true, and love that grows stronger every moment.<br><br>
+      I hope today makes you feel just how loved, special, and precious you are to me.<br><br>
+      Forever yours,<br><strong>Achraf 💞</strong>
+    </div>
+
+    <footer>Made with love — Achraf</footer>
+  </div>
+</div>
+
+<script>
+/*
+ - Online countdown: use worldtimeapi.org to get UTC time. If it fails, fallback to local time (still works).
+ - Reveal at 2025-10-22T11:24:00Z UTC
+ - Confetti + floating hearts + simple romantic synth (WebAudio) without external files
+*/
+
+const TARGET_ISO = "2025-10-26T00:00:00Z";
+const targetDate = new Date(TARGET_ISO).getTime();
+
+const DOM = {
+  days: document.getElementById("days"),
+  hours: document.getElementById("hours"),
+  minutes: document.getElementById("minutes"),
+  seconds: document.getElementById("seconds"),
+  message: document.getElementById("mainMessage"),
+  confettiCanvas: document.getElementById("confetti"),
+  playControl: document.getElementById("playControl"),
+  card: document.querySelector(".card")
+};
+
+let serverOffset = 0; // ms to add to local Date to match server UTC
+let timerInterval = null;
+let confettiActive = false;
+let audioAllowed = false;
+
+// allow user to enable audio (browsers require gesture)
+DOM.playControl.addEventListener('click',()=>{
+  audioAllowed = true;
+  DOM.playControl.textContent = "Music will play on reveal";
+  DOM.playControl.disabled = true;
+});
+
+// fetch server time (UTC) to compute offset
+async function syncTime(){
+  try{
+    const res = await fetch("https://worldtimeapi.org/api/timezone/Etc/UTC", {cache: "no-store"});
+    if(!res.ok) throw new Error("time api failed");
+    const j = await res.json();
+    // j.utc_datetime is like "2025-10-20T12:34:56.789012+00:00"
+    const serverNow = new Date(j.utc_datetime).getTime();
+    serverOffset = serverNow - Date.now();
+    console.log("server offset (ms):", serverOffset);
+  }catch(e){
+    console.warn("Time sync failed, falling back to local time. Error:", e);
+    serverOffset = 0;
+  }
+}
+
+// compute "now" based on offset
+function now(){
+  return Date.now() + serverOffset;
+}
+
+function pad(n){ return String(n).padStart(2,"0") }
+
+function updateParts(diff){
+  if(diff <= 0){
+    DOM.days.textContent = "00";
+    DOM.hours.textContent = "00";
+    DOM.minutes.textContent = "00";
+    DOM.seconds.textContent = "00";
+    return;
+  }
+  const days = Math.floor(diff/(1000*60*60*24));
+  const hours = Math.floor((diff%(1000*60*60*24))/(1000*60*60));
+  const mins = Math.floor((diff%(1000*60*60))/(1000*60));
+  const secs = Math.floor((diff%(1000*60))/1000);
+  DOM.days.textContent = pad(days);
+  DOM.hours.textContent = pad(hours);
+  DOM.minutes.textContent = pad(mins);
+  DOM.seconds.textContent = pad(secs);
+}
+
+// reveal sequence: message show, confetti, hearts, music
+function reveal(){
+  if(DOM.message.classList.contains('show')) return;
+  DOM.message.classList.add('show');
+  DOM.message.setAttribute('aria-hidden','false');
+  startConfetti();
+  spawnHearts();
+  if(audioAllowed) playRomanticMelody();
+  // subtle focus for accessibility
+  DOM.message.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+// Interval loop to update countdown and trigger reveal when done
+function startTimerLoop(){
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(()=>{
+    const diff = targetDate - now();
+    if(diff <= 0){
+      updateParts(0);
+      clearInterval(timerInterval);
+      reveal();
+    } else {
+      updateParts(diff);
+    }
+  }, 250); // 250ms smooth updates
+}
+
+// ---- confetti implementation (simple slow falling) ----
+const canvas = DOM.confettiCanvas;
+const ctx = canvas.getContext('2d');
+let W = canvas.width = DOM.card.clientWidth;
+let H = canvas.height = DOM.card.clientHeight;
+function resizeCanvas(){ 
+  W = canvas.width = DOM.card.clientWidth;
+  H = canvas.height = DOM.card.clientHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+
+const confettiPieces = [];
+function createConfettiPiece(x){
+  const w = rand(6,14);
+  return {
+    x: x !== undefined ? x : rand(0,W),
+    y: rand(-H,0),
+    w, h: w*0.6,
+    vx: rand(-0.6,0.6),
+    vy: rand(0.8,1.6),
+    r: rand(0,360),
+    color: pick(['#ffc107','#ff4081','#7c4dff','#00e676','#03a9f4','#ff7043']),
+    rotSpeed: rand(-4,4)
+  };
+}
+function rand(a,b){return Math.random()*(b-a)+a}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)]}
+
+function startConfetti(){
+  if(confettiActive) return;
+  confettiActive = true;
+  canvas.classList.add('active');
+  // populate pieces
+  confettiPieces.length = 0;
+  for(let i=0;i<80;i++) confettiPieces.push(createConfettiPiece());
+  requestAnimationFrame(confettiLoop);
+  // stop after some time
+  setTimeout(()=>{ confettiActive = false }, 18000);
+}
+function confettiLoop(){
+  ctx.clearRect(0,0,W,H);
+  if(!confettiActive && confettiPieces.length===0){ canvas.classList.remove('active'); return; }
+  for(let i=confettiPieces.length-1;i>=0;i--){
+    const p = confettiPieces[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.r += p.rotSpeed;
+    // draw
+    ctx.save();
+    ctx.translate(p.x,p.y);
+    ctx.rotate(p.r*Math.PI/180);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+    ctx.restore();
+    if(p.y > H+20){ // recycle or remove
+      if(confettiActive) Object.assign(p, createConfettiPiece(rand(0,W)));
+      else confettiPieces.splice(i,1);
+    }
+  }
+  requestAnimationFrame(confettiLoop);
+}
+
+// ---- floating hearts ----
+function spawnHearts(){
+  const container = document.createElement('div');
+  container.className = 'hearts';
+  document.body.appendChild(container);
+  const count = 12;
+  for(let i=0;i<count;i++){
+    const h = document.createElement('div');
+    h.className = 'h';
+    h.style.left = (i*40 - 120) + 'px';
+    h.style.animationDelay = (i*0.2) + 's';
+    h.style.transformOrigin = 'center';
+    container.appendChild(h);
+  }
+  setTimeout(()=>{ container.remove() }, 6000);
+}
+
+// ---- simple romantic melody via WebAudio ----
+let audioCtx = null;
+function ensureAudioContext(){
+  if(audioCtx) return audioCtx;
+  try{
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }catch(e){
+    console.warn("Audio not supported", e);
+  }
+  return audioCtx;
+}
+// play a gentle sequence of notes (sine + triangle subtle detune)
+// notes in Hz for a simple motif
+function playRomanticMelody(){
+  const actx = ensureAudioContext();
+  if(!actx) return;
+  const nowt = actx.currentTime + 0.05;
+  const master = actx.createGain(); master.gain.value = 0.15; master.connect(actx.destination);
+  const notes = [440, 523.25, 659.25, 523.25, 440, 392, 440]; // A4, C5, E5 motif
+  const dur = 0.9;
+  notes.forEach((freq,i)=>{
+    const o = actx.createOscillator();
+    const o2 = actx.createOscillator();
+    o.type = 'sine'; o.frequency.value = freq;
+    o2.type = 'triangle'; o2.frequency.value = freq*0.997;
+    const g = actx.createGain(); g.gain.value = 0;
+    o.connect(g); o2.connect(g); g.connect(master);
+    const t0 = nowt + i*dur*0.9;
+    g.gain.cancelScheduledValues(t0);
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(1,t0+0.12);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur-0.12);
+    o.start(t0); o.stop(t0+dur);
+    o2.start(t0); o2.stop(t0+dur);
+  });
+  // gentle pad after melody
+  const pad = actx.createOscillator(); pad.type='sine'; pad.frequency.value=220;
+  const pg = actx.createGain(); pg.gain.value = 0.0; pad.connect(pg); pg.connect(master);
+  pad.start(nowt); pad.stop(nowt + notes.length*dur + 2.0);
+  pg.gain.setValueAtTime(0.0001, nowt);
+  pg.gain.exponentialRampToValueAtTime(0.35, nowt+1.0);
+  pg.gain.exponentialRampToValueAtTime(0.0001, nowt + notes.length*dur + 1.6);
+}
+
+// ---- initialization ----
+(async function init(){
+  await syncTime();
+  // set initial values from now
+  const initialDiff = targetDate - now();
+  if(initialDiff <= 0){
+    // already past target
+    updateParts(0);
+    reveal();
+    return;
+  } else {
+    updateParts(initialDiff);
+  }
+  startTimerLoop();
+})();
+
+// try to keep canvas sized to card area (for nicer visuals)
+resizeCanvas();
+
+// --- YouTube autoplay 10s before reveal ---
+const YT_VIDEO_ID = "5u4xTa3LR2U"; // from user link
+let ytStarted = false;
+let ytIframe = null;
+
+function createYouTubeIframe(autoplay=true){
+  if(ytIframe) return ytIframe;
+  const iframe = document.createElement('iframe');
+  iframe.width = "0";
+  iframe.height = "0";
+  iframe.style.border = "0";
+  iframe.style.position = "absolute";
+  iframe.style.left = "-9999px";
+  iframe.src = `https://www.youtube.com/embed/${YT_VIDEO_ID}?rel=0&playsinline=1${autoplay ? '&autoplay=1' : ''}&mute=0`;
+  iframe.allow = "autoplay; encrypted-media";
+  document.body.appendChild(iframe);
+  ytIframe = iframe;
+  return iframe;
+}
+
+// Attempt to start YouTube playback. Browsers may block autoplay if user didn't interact.
+async function startYouTubePlayback(){
+  if(ytStarted) return;
+  ytStarted = true;
+  try{
+    // Try to create iframe with autoplay flag
+    createYouTubeIframe(true);
+  }catch(e){
+    console.warn("YouTube autoplay failed", e);
+  }
+}
+
+// Schedule YouTube to start 10s before target
+function scheduleYouTube(diff){
+  // diff is milliseconds remaining
+  if(ytStarted) return;
+  if(diff <= 10000){
+    // if user already enabled audio via button (gesture), start; otherwise still try
+    startYouTubePlayback();
+  }
+}
+
+// Modify the existing timer loop to call scheduleYouTube
+// We'll monkey-patch startTimerLoop to inject schedule calls by replacing the interval function
+(function injectSchedule(){
+  const originalStartTimerLoop = startTimerLoop;
+  startTimerLoop = function(){
+    if(timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(()=>{
+      const diff = targetDate - now();
+      if(diff <= 0){
+        updateParts(0);
+        clearInterval(timerInterval);
+        reveal();
+      } else {
+        updateParts(diff);
+        scheduleYouTube(diff);
+      }
+    }, 250);
+  };
+})();
+
+// If the reveal already happened (page re-opened after target), ensure YT is ready
+if(targetDate - now() <= 10000){
+  scheduleYouTube(targetDate - now());
+}
+
+</script>
+</body>
+</html>
